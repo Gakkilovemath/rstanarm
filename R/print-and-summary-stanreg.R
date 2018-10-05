@@ -76,7 +76,6 @@
 #' 
 print.stanreg <- function(x, digits = 1, ...) {
   cat(x$stan_function)
-<<<<<<< HEAD:R/print-and-summary-stanreg.R
   surv <- is.surv(x)
   if (surv) {
     cat("\n baseline hazard:", basehaz_string(x$basehaz)) 
@@ -499,6 +498,7 @@ yes_no_string <- function(x) {
 percent_string <- function(numer, denom) {
   val <- round(100 * numer / denom, 1)
   paste0("(", val, "%)")
+}
 
 # get name of aux parameter based on family
 .aux_name <- function(object) {
