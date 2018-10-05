@@ -165,7 +165,7 @@ test_that("kfold works on some examples", {
   mtcars2 <- mtcars
   mtcars2$wt[1] <- NA # make sure kfold works if NAs are dropped from original data
   SW(
-    fit_gaus <- stan_glm(mpg ~ wt, data = mtcars2, seed = 12345, refresh = 0,
+    fit_gaus <- stan_glm(mpg ~ wt, data = mtcars2, seed = SEED, refresh = 0,
                          chains = 1, iter = 100)
   )
   SW(kf <- kfold(fit_gaus, 4))
@@ -294,7 +294,7 @@ context("loo and waic helpers")
 test_that("kfold_and_reloo_data works", {
   f <- rstanarm:::kfold_and_reloo_data
   d <- f(example_model)
-  expect_identical(d, lme4::cbpp)
+  expect_identical(d, lme4::cbpp[, colnames(d)])
 
   # if 'data' arg not originally specified when fitting the model
   y <- rnorm(40)
@@ -304,7 +304,7 @@ test_that("kfold_and_reloo_data works", {
   # if 'subset' arg specified when fitting the model
   SW(fit2 <- stan_glm(mpg ~ wt, data = mtcars, subset = gear != 5, iter = ITER,
                       chains = CHAINS, refresh = REFRESH))
-  expect_equivalent(f(fit2), subset(mtcars, gear != 5))
+  expect_equivalent(f(fit2), subset(mtcars[mtcars$gear != 5, c("mpg", "wt")]))
 })
 
 test_that(".weighted works", {
