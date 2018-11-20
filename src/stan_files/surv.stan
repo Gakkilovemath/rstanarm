@@ -426,6 +426,9 @@ data {
   int<lower=0> idx_cpts[7,2]; // index for breaking cpts into epts,qpts_event,etc
   int<lower=0> len_cpts;
 
+  // log crude event rate (used for centering log baseline hazard)
+  real log_crude_event_rate;
+
   // response and time variables
   vector[nevent] t_event;  // time of events
   vector[nlcens] t_lcens;  // time of left censoring
@@ -436,11 +439,12 @@ data {
   vector[len_cpts] cpts;   // time at events and all quadrature points
 
   // predictor matrices (time-fixed)
-  matrix[nevent,K] x_event; // for rows with events
-  matrix[nlcens,K] x_lcens; // for rows with left censoring
-  matrix[nrcens,K] x_rcens; // for rows with right censoring
-  matrix[nicens,K] x_icens; // for rows with interval censoring
-  matrix[ndelay,K] x_delay; // for rows with delayed entry
+  vector[K] x_bar;           // predictor means
+  matrix[nevent,K] x_event;  // for rows with events
+  matrix[nlcens,K] x_lcens;  // for rows with left censoring
+  matrix[nrcens,K] x_rcens;  // for rows with right censoring
+  matrix[nicens,K] x_icens;  // for rows with interval censoring
+  matrix[ndelay,K] x_delay;  // for rows with delayed entry
   matrix[len_cpts,K] x_cpts; // for rows at events and all quadrature points
 
   // predictor matrices (time-varying)
@@ -653,6 +657,13 @@ model {
         if (ndelay > 0) eta_delay += gamma[1];
       }
 
+      // add on log crude event rate (helps to center intercept)
+      if (nevent > 0) eta_event += log_crude_event_rate;
+      if (nlcens > 0) eta_lcens += log_crude_event_rate;
+      if (nrcens > 0) eta_rcens += log_crude_event_rate;
+      if (nicens > 0) eta_icens += log_crude_event_rate;
+      if (ndelay > 0) eta_delay += log_crude_event_rate;
+
       // evaluate log hazard and log survival
       if (type == 5) { // exponential model
         if (nevent > 0) target +=  exponential_log_haz (eta_event);
@@ -725,6 +736,9 @@ model {
       if (has_intercept == 1) {
         eta += gamma[1];
       }
+
+      // add on log crude event rate (helps to center intercept)
+      eta += log_crude_event_rate;
 
       // evaluate log hazard
       if (type == 5) { // exponential model
@@ -799,4 +813,14 @@ model {
                            prior_dist_for_smooth, prior_df_for_smooth);
   }
 
+}
+
+generated quantities {
+  real alpha; // transformed intercept
+
+  if (has_intercept == 1) {
+    alpha = log_crude_event_rate - dot_product(x_bar, beta) + gamma[1];
+  } else {
+    alpha = log_crude_event_rate - dot_product(x_bar, beta);
+  }
 }

@@ -333,7 +333,12 @@ stan_surv <- function(formula,
   t_icenl <- t_end[status == 3] # lower limit of interval censoring time
   t_icenu <- t_upp[status == 3] # upper limit of interval censoring time
   t_delay <- t_beg[delayed]     # delayed entry time
-
+  
+  # calculate log crude event rate
+  t_tmp <- sum(rowMeans(cbind(t_end, t_upp), na.rm = TRUE) - t_beg)
+  d_tmp <- sum(!status == 0)
+  log_crude_event_rate = log(d_tmp / t_tmp)
+  
   # dimensions
   nevent <- sum(status == 1)
   nrcens <- sum(status == 0)
@@ -442,12 +447,15 @@ stan_surv <- function(formula,
   #----- predictor matrices
   
   # time-fixed predictor matrix
-  x <- make_x(formula$tf_form, mf)$x
-  x_event <- keep_rows(x, status == 1)
-  x_lcens <- keep_rows(x, status == 2)
-  x_rcens <- keep_rows(x, status == 0)
-  x_icens <- keep_rows(x, status == 3)
-  x_delay <- keep_rows(x, delayed)
+  x_stuff <- make_x(formula$tf_form, mf)
+  x          <- x_stuff$x
+  x_bar      <- x_stuff$x_bar
+  x_centered <- x_stuff$x_centered  
+  x_event <- keep_rows(x_centered, status == 1)
+  x_lcens <- keep_rows(x_centered, status == 2)
+  x_rcens <- keep_rows(x_centered, status == 0)
+  x_icens <- keep_rows(x_centered, status == 3)
+  x_delay <- keep_rows(x_centered, delayed)
   K <- ncol(x)
   if (has_quadrature) {
     x_cpts <- rbind(x_event,
@@ -490,7 +498,8 @@ stan_surv <- function(formula,
   
   standata <- nlist(
     K, S, 
-    nvars, 
+    nvars,
+    x_bar,
     has_intercept, 
     has_quadrature,
     smooth_map,
@@ -499,6 +508,7 @@ stan_surv <- function(formula,
     len_cpts,
     idx_cpts,
     type = basehaz$type,
+    log_crude_event_rate,
     
     nevent       = if (has_quadrature) 0L else nevent,
     nlcens       = if (has_quadrature) 0L else nlcens,
@@ -661,7 +671,7 @@ stan_surv <- function(formula,
   stanfit  <- stanmodels$surv
   
   # specify parameters for stan to monitor
-  stanpars <- c(if (standata$has_intercept) "gamma",
+  stanpars <- c(if (standata$has_intercept) "alpha",
                 if (standata$K)             "beta",
                 if (standata$S)             "beta_tde",
                 if (standata$S)             "smooth_sd",
@@ -1395,7 +1405,8 @@ make_model_frame <- function(formula, data, check_constant = TRUE) {
 # @param model_frame The model frame.
 # @return A named list with the following elements:
 #   x: the fe model matrix, not centred and without intercept.
-#   xbar: the column means of the model matrix.
+#   x_bar: the column means of the model matrix.
+#   x_centered: the fe model matrix, centered.
 #   N,K: number of rows (observations) and columns (predictors) in the
 #     fixed effects model matrix
 make_x <- function(formula, model_frame, xlevs = NULL, check_constant = TRUE) {
@@ -1405,7 +1416,10 @@ make_x <- function(formula, model_frame, xlevs = NULL, check_constant = TRUE) {
   x <- drop_intercept(x)
   
   # column means of predictor matrix
-  xbar <- colMeans(x)
+  x_bar <- aa(colMeans(x))
+  
+  # centered predictor matrix
+  x_centered <- sweep(x, 2, x_bar, FUN = "-")
   
   # identify any column of x with < 2 unique values (empty interaction levels)
   sel <- (apply(x, 2L, n_distinct) < 2)
@@ -1414,7 +1428,7 @@ make_x <- function(formula, model_frame, xlevs = NULL, check_constant = TRUE) {
     stop2("Cannot deal with empty interaction levels found in columns: ", cols)
   }
   
-  nlist(x, xbar, N = NROW(x), K = NCOL(x))
+  nlist(x, x_centered, x_bar, N = NROW(x), K = NCOL(x))
 }
 
 # Return a predictor for the tde spline terms
