@@ -675,7 +675,7 @@ stan_surv <- function(formula,
                 if (standata$K)             "beta",
                 if (standata$S)             "beta_tde",
                 if (standata$S)             "smooth_sd",
-                if (standata$nvars)         "coefs")
+                if (standata$nvars)         "aux")
   
   # fit model using stan
   if (algorithm == "sampling") { # mcmc

@@ -551,7 +551,7 @@ parameters {
   vector[K] z_beta;
 
   // intercept
-  real gamma[has_intercept == 1];
+  real gamma[has_intercept];
 
   // unscaled basehaz parameters
   //   exp model:      nvars = 0, ie. no aux parameter
@@ -816,11 +816,20 @@ model {
 }
 
 generated quantities {
-  real alpha; // transformed intercept
+  // tranformations to adjust for:
+  //   - centering of covariates and 
+  //   - centering of baseline hazard around the crude event rate
+  real alpha[has_intercept]; // transformed intercept
+  vector[nvars] aux;              // transformed baseline hazard parameters
 
-  if (has_intercept == 1) {
-    alpha = log_crude_event_rate - dot_product(x_bar, beta) + gamma[1];
-  } else {
-    alpha = log_crude_event_rate - dot_product(x_bar, beta);
+  if (type == 4) { // m-splines
+    aux = coefs * exp(log_crude_event_rate - dot_product(x_bar, beta));
+  }
+  else if (type == 2) { // b-splines
+    aux = coefs + log_crude_event_rate - dot_product(x_bar, beta);
+  }
+  else { // exp, weibull, gompertz
+    aux = coefs;
+    alpha[1] = log_crude_event_rate - dot_product(x_bar, beta) + gamma[1];
   }
 }
